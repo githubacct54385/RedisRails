@@ -18,12 +18,12 @@ $ cd RedisRails
 $ bundle install
 ```
 
-* Now it's time to start your Redis Server.  Open a Terminal and use this command:
+* Now it's time to start your Redis Server.  Open a new terminal and use this command:
 ```
 $ redis server
 ```
 
-* Start the Rails server using
+* In your first terminal, start the Rails server using
 ```
 $ rails s
 ```
