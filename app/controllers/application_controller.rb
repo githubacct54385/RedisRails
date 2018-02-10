@@ -2,14 +2,16 @@
 class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 
-  def throttled_api_message
-    'You have fired too many requests. Please wait for a couple of minutes.'
+  def throttled_api_message(client_ip)
+    msg = "Whoa there!  "
+    msg += "You've pinged the server way too many times.  "
+    msg += "The cooldown period is #{blocking_timespan} seconds"
   end
 
   def remote_ip
     if request.remote_ip == '127.0.0.1'
       # Hard coded remote address
-      '123.45.67.89'
+      '127.0.0.1'
     else
       request.remote_ip
     end
@@ -29,19 +31,9 @@ class ApplicationController < ActionController::Base
     puts "Client IP: #{client_ip} --  Number of Requests: #{num_requests}"
   end
 
-  def watching_timespan
-    # time-span to count the requests (in seconds)
-    20
-  end
-
-  def allowed_requests
-    # maximum request allowed within the time-span
-    30
-  end
-
   def blocking_timespan
     # "cool-down" period in seconds
-    30
+    15
   end
 
   def rails_warning(client_ip)
@@ -58,21 +50,48 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def ExceededRequestsCount(num_requests, allowed_requests)
+    num_requests > allowed_requests
+  end
+
+  def UserIsNotBlocked(blocked_user_key)
+    $redis.get(blocked_user_key) != 1
+  end
+
+
+  # Returns true
   def track_api_usage(client_ip)
-    return true if ShouldBlockUser(client_ip)
-    user_key = user_key_func(client_ip)
+    # time-span to count the requests (in seconds)
+    watching_timespan=60
+    # maximum request allowed within the time-span
+    allowed_requests=30
+
+    #compose key for counting requests
+    user_key="counting_#{client_ip}"
+    # compose key for identifying blocked users
+    blocked_user_key="locked_#{client_ip}"
+
+    # check if the user already has a counter
     if $redis.get(user_key)
-      num_requests = $redis.incr(user_key)
+      # main action: increment counter
+      num_requests=$redis.incr(user_key)
       print_details(client_ip, num_requests)
-      if num_requests > allowed_requests
-        rails_warning(client_ip)
-        blocked_user_key = blocked_user_key_func(client_ip)
-        $redis.set(blocked_user_key, 1)
-        $redis.expire(blocked_user_key, blocking_timespan)
+
+      # check limit
+      if ExceededRequestsCount(num_requests, allowed_requests) && UserIsNotBlocked(blocked_user_key)
+        # write something into the log file for alerting
+        Rails.logger.warn "Overheat: User with id #{client_ip} is over usage limit."
+        # mark the user as "blocked"
+        $redis.set(blocked_user_key,1) if $redis.get(blocked_user_key) != 1
+        # make the blocking expiring itself after the defined cool-down period
+        $redis.expire(blocked_user_key,blocking_timespan)
       end
+
     else
-      $redis.set(user_key, 1)
-      $redis.expire(user_key, watching_timespan)
+      # no key for counting exists yet - so set a new one with ttl
+      $redis.set(user_key,1)
+      $redis.expire(user_key,watching_timespan)
+      print_details(client_ip, 1)
     end
   end
 end

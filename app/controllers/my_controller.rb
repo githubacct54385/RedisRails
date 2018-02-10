@@ -5,13 +5,14 @@ class MyController < ApplicationController
 
     puts client_ip
     # Check for API Throttling
-    is_blocked = track_api_usage(client_ip)
+    track_api_usage(client_ip)
 
-    if is_blocked
+    blocked_user_key="locked_#{client_ip}"
+    if $redis.get(blocked_user_key)
       render status: 429,
-             json: { status: '429', message: throttled_api_message }
+             json: { message: throttled_api_message(client_ip) }
     else
-      render html: " Hello World! #{client_ip}.  Is Blocked? #{is_blocked}"
+      render html: "Client IP: #{client_ip}.  You have not yet throttled the server."
     end
   end
 end
