@@ -43,7 +43,7 @@ class ApplicationController < ActionController::Base
 
   def ShouldBlockUser(client_ip)
     blocked_user = blocked_user_key_func(client_ip)
-    if $redis.get(blocked_user)
+    if RedisModule.redis.get(blocked_user)
       return true
     else
       return false
@@ -55,9 +55,8 @@ class ApplicationController < ActionController::Base
   end
 
   def UserIsNotBlocked(blocked_user_key)
-    $redis.get(blocked_user_key) != 1
+    RedisModule.redis.get(blocked_user_key) != 1
   end
-
 
   # Returns true
   def track_api_usage(client_ip)
@@ -72,9 +71,9 @@ class ApplicationController < ActionController::Base
     blocked_user_key="locked_#{client_ip}"
 
     # check if the user already has a counter
-    if $redis.get(user_key)
+    if RedisModule.redis.get(user_key)
       # main action: increment counter
-      num_requests=$redis.incr(user_key)
+      num_requests=RedisModule.redis.incr(user_key)
       print_details(client_ip, num_requests)
 
       # check limit
@@ -82,15 +81,15 @@ class ApplicationController < ActionController::Base
         # write something into the log file for alerting
         Rails.logger.warn "Overheat: User with id #{client_ip} is over usage limit."
         # mark the user as "blocked"
-        $redis.set(blocked_user_key,1) if $redis.get(blocked_user_key) != 1
+        RedisModule.redis.set(blocked_user_key,1) if RedisModule.redis.get(blocked_user_key) != 1
         # make the blocking expiring itself after the defined cool-down period
-        $redis.expire(blocked_user_key,blocking_timespan)
+        RedisModule.redis.expire(blocked_user_key,blocking_timespan)
       end
 
     else
       # no key for counting exists yet - so set a new one with ttl
-      $redis.set(user_key,1)
-      $redis.expire(user_key,watching_timespan)
+      RedisModule.redis.set(user_key, 1)
+      RedisModule.redis.expire(user_key, watching_timespan)
       print_details(client_ip, 1)
     end
   end
