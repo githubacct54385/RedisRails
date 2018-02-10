@@ -2,6 +2,10 @@
 class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 
+  def client_ip_val(client_ip)
+    @client_ip = client_ip
+  end
+
   def throttled_api_message
     msg = 'Whoa there!  '
     msg += "You've pinged the server way too many times.  "
@@ -17,18 +21,28 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  def user_key_func(client_ip)
+  def user_key_func
     # compose key for counting requests
-    "counting_#{client_ip}"
+    "counting_#{@client_ip}"
   end
 
-  def blocked_user_key_func(client_ip)
+  def blocked_user_key_func
     # compose key for identifying blocked users
-    "locked_#{client_ip}"
+    "locked_#{@client_ip}"
   end
 
-  def print_details(client_ip, num_requests)
-    puts "Client IP: #{client_ip} --  Number of Requests: #{num_requests}"
+  def print_details(num_requests)
+    puts "Client IP: #{@client_ip} --  Number of Requests: #{num_requests}"
+  end
+
+  def watching_timespan
+    # time-span to count the requests (in seconds)
+    60
+  end
+
+  def allowed_requests
+    # maximum request allowed within the time-span
+    30
   end
 
   def blocking_timespan
@@ -36,13 +50,13 @@ class ApplicationController < ActionController::Base
     15
   end
 
-  def rails_warning(client_ip)
+  def rails_warning
     msg = 'Overheat: User with id '
-    msg += "#{user_key_func(client_ip)} is over usage limit."
+    msg += "#{user_key_func} is over usage limit."
     Rails.logger.warn msg
   end
 
-  def exceeded_requests_count(num_requests, allowed_requests)
+  def exceeded_requests_count(num_requests)
     num_requests > allowed_requests
   end
 
@@ -50,41 +64,62 @@ class ApplicationController < ActionController::Base
     RedisModule.redis.get(blocked_user_key) != 1
   end
 
-  # Returns true
-  def track_api_usage(client_ip)
-    # time-span to count the requests (in seconds)
-    watching_timespan = 60
-    # maximum request allowed within the time-span
-    allowed_requests = 30
-
+  def user_key
     # compose key for counting requests
-    user_key = "counting_#{client_ip}"
-    # compose key for identifying blocked users
-    blocked_user_key = "locked_#{client_ip}"
+    "counting_#{@client_ip}"
+  end
 
+  def blocked_user_key
+    # compose key for identifying blocked users
+    "locked_#{@client_ip}"
+  end
+
+  def redis_module_not_set
+    RedisModule.redis.get(blocked_user_key) != 1
+  end
+
+  def redis_module_set
+    RedisModule.redis.set(blocked_user_key, 1)
+  end
+
+  def redis_blocked_flag_set
+    # mark the user as "blocked"
+    redis_module_set if redis_module_not_set
+  end
+
+  def check_limits(num_requests)
+    # check limit
+    if exceeded_requests_count(num_requests) &&
+       user_is_not_blocked(blocked_user_key)
+      # write something into the log file for alerting
+      rails_warning
+      redis_blocked_flag_set
+      # make the blocking expiring itself after the defined cool-down period
+      RedisModule.redis.expire(blocked_user_key, blocking_timespan)
+    end
+  end
+
+  def handle_found_user_counter
+    # main action: increment counter
+    num_requests = RedisModule.redis.incr(user_key)
+    print_details(num_requests)
+    check_limits(num_requests)
+  end
+
+  def handle_not_found_user_counter
+    # no key for counting exists yet - so set a new one with ttl
+    RedisModule.redis.set(user_key, 1)
+    RedisModule.redis.expire(user_key, watching_timespan)
+    print_details(1)
+  end
+
+  def track_api_usage(client_ip)
+    client_ip_val(client_ip)
     # check if the user already has a counter
     if RedisModule.redis.get(user_key)
-      # main action: increment counter
-      num_requests = RedisModule.redis.incr(user_key)
-      print_details(client_ip, num_requests)
-
-      # check limit
-      if exceeded_requests_count(num_requests, allowed_requests) &&
-         user_is_not_blocked(blocked_user_key)
-        # write something into the log file for alerting
-        rails_warning(client_ip)
-        # mark the user as "blocked"
-        if RedisModule.redis.get(blocked_user_key) != 1
-          RedisModule.redis.set(blocked_user_key, 1)
-        end
-        # make the blocking expiring itself after the defined cool-down period
-        RedisModule.redis.expire(blocked_user_key, blocking_timespan)
-      end
+      handle_found_user_counter
     else
-      # no key for counting exists yet - so set a new one with ttl
-      RedisModule.redis.set(user_key, 1)
-      RedisModule.redis.expire(user_key, watching_timespan)
-      print_details(client_ip, 1)
+      handle_not_found_user_counter
     end
   end
 end
