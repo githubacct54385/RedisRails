@@ -2,13 +2,10 @@
 
 I'm using this repository to teach myself how to use Redis in a Rails environment.  
 
-Things you may want to cover:
-
 * Ruby version - 2.3.0
 
-* System dependencies - [Download Redis](https://redis.io/)
-
-* Configuration
+* System dependencies
+1. Please [Download Redis](https://redis.io/)
 
 * Clone the repo
 ```
