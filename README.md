@@ -4,8 +4,7 @@ I'm using this repository to teach myself how to use Redis in a Rails environmen
 
 * Ruby version - 2.3.0
 
-* System dependencies
-1. Please [Download Redis](https://redis.io/)
+If you don't have Redis on your machine, please download it [here](https://redis.io/)
 
 * Clone the repo
 ```
