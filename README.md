@@ -4,6 +4,11 @@ I'm using this repository to teach myself how to use Redis in a Rails environmen
 
 * Ruby version - 2.3.0
 
+Things you will need to get started with this repo:
+1. [Ruby](https://www.ruby-lang.org/en/)
+2. [Rails](http://rubyonrails.org/)
+3. Redis - Instructions (for Mac) on how to install Redis can be found [here](https://medium.com/@petehouston/install-and-config-redis-on-mac-os-x-via-homebrew-eb8df9a4f298)
+
 If you don't have Redis on your machine, please download it [here](https://redis.io/)
 
 * Clone the repo
