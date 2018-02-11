@@ -12,9 +12,9 @@ class MyController < ApplicationController
 end
 
 def block_msg
-  msg = 'Whoa there!  '
-  msg += "You've pinged the server way too many times.  "
-  msg += "The cooldown period is #{blocking_timespan} seconds  "
+  msg = "Client #{@client_ip} /// "
+  msg += 'Server Condition: Throttled By User /// '
+  msg += "Curr Requests: #{current_requests} /// "
   msg + "Please wait #{blocked_key_pttl} more seconds"
 end
 
@@ -28,7 +28,7 @@ def handle_response
   if RedisModule.redis.get(@blocked_user_key)
     render status: 429, json: { message: block_msg }
   else # everything is fine
-    render html: pass_msg
+    render status: 200, json: { message: pass_msg }
   end
 end
 
