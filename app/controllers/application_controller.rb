@@ -6,12 +6,6 @@ class ApplicationController < ActionController::Base
     @client_ip = client_ip
   end
 
-  def throttled_api_message
-    msg = 'Whoa there!  '
-    msg += "You've pinged the server way too many times.  "
-    msg + "The cooldown period is #{blocking_timespan} seconds"
-  end
-
   def remote_ip
     if request.remote_ip == '127.0.0.1'
       # Hard coded remote address
@@ -37,7 +31,7 @@ class ApplicationController < ActionController::Base
 
   def watching_timespan
     # time-span to count the requests (in seconds)
-    60
+    15
   end
 
   def allowed_requests
@@ -61,7 +55,7 @@ class ApplicationController < ActionController::Base
   end
 
   def user_is_not_blocked(blocked_user_key)
-    RedisModule.redis.get(blocked_user_key) != 1
+    RedisModule.redis.get(blocked_user_key).to_i != 1
   end
 
   def user_key
@@ -74,17 +68,13 @@ class ApplicationController < ActionController::Base
     "locked_#{@client_ip}"
   end
 
-  def redis_module_not_set
-    RedisModule.redis.get(blocked_user_key) != 1
-  end
-
   def redis_module_set
-    RedisModule.redis.set(blocked_user_key, 1)
-  end
-
-  def redis_blocked_flag_set
-    # mark the user as "blocked"
-    redis_module_set if redis_module_not_set
+    unless RedisModule.redis.get(blocked_user_key).to_i == 1
+      RedisModule.redis.set(blocked_user_key, 1)
+      # make the blocking expiring itself after the defined cool-down period
+      RedisModule.redis.expire(blocked_user_key, blocking_timespan)
+      puts 'set to blocked'
+    end
   end
 
   def check_limits(num_requests)
@@ -93,9 +83,7 @@ class ApplicationController < ActionController::Base
        user_is_not_blocked(blocked_user_key)
       # write something into the log file for alerting
       rails_warning
-      redis_blocked_flag_set
-      # make the blocking expiring itself after the defined cool-down period
-      RedisModule.redis.expire(blocked_user_key, blocking_timespan)
+      redis_module_set
     end
   end
 
